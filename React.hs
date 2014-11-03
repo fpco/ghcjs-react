@@ -118,7 +118,7 @@ main = do
     container <- getElementById "container"
     reactRender container $ reactElement "i" (ElemProps [] [])
         [ nodeElement $ reactElement "b"
-            (ElemProps [("text-decoration", "underline")] [])
+            (ElemProps [("textDecoration", "underline")] [])
             [ nodeText "Hello World 3"
             ]
         ]
