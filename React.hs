@@ -19,6 +19,7 @@ import Data.Aeson
 import Data.Hashable
 import GHC.Generics (Generic)
 import qualified Data.Text as T
+import Control.Concurrent.STM
 
 data ReactElement_
 type ReactElement' = JSRef ReactElement_
@@ -129,15 +130,41 @@ reactRender dom re = do
     re' <- toReactElem re
     js_React_render re' dom
 
-main :: IO ()
-main = do
-    container <- getElementById "container"
-    reactRender container $ reactElement "i" (ElemProps [] [] [])
+
+class ToReactElement a where
+    toReactElement :: TVar a -> a -> ReactElement
+
+data MyState = MyState Int
+    deriving Eq
+instance ToReactElement MyState where
+    toReactElement var (MyState i) = reactElement "i" (ElemProps [] [] [])
         [ nodeElement $ reactElement "b"
             (ElemProps
                 [("textDecoration", "underline")]
-                (Map.singleton "click" (0, const $ alert "Clicked!"))
+                (Map.singleton "click" (i, const $ atomically $ do
+                    MyState i <- readTVar var
+                    writeTVar var $ MyState $ i + 1))
                 [])
-            [ nodeText "Hello World 3"
+            [ nodeText $ "Total clicks: " `T.append` T.pack (show i)
+            ]
+        , nodeElement $ reactElement "span"
+            (ElemProps [] [] [])
+            [ nodeText "This span should never be modified."
             ]
         ]
+
+renderThread dom state0 = do
+    var <- newTVarIO state0
+    let loop stateOld = do
+            reactRender dom (toReactElement var stateOld)
+            stateNew <- atomically $ do
+                stateNew <- readTVar var
+                check (stateOld /= stateNew)
+                return stateNew
+            loop stateNew
+    loop state0
+
+main :: IO ()
+main = do
+    container <- getElementById "container"
+    renderThread container $ MyState 0
