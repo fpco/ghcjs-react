@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 import GHCJS.Types
 import GHCJS.Marshal
 import GHCJS.DOM.Types (Element)
@@ -15,6 +16,8 @@ import Data.Vector (Vector)
 import Control.Applicative
 import qualified Data.Vector as V
 import Data.Aeson
+import Data.Hashable
+import GHC.Generics (Generic)
 
 data ReactElement_
 type ReactElement' = JSRef ReactElement_
@@ -43,8 +46,7 @@ instance ToReactNode a => ToReactNode [a] where
 instance ToReactNode a => ToReactNode (Vector a) where
     toReactNode = fmap castRef . toJSRef . V.toList <=< V.mapM toReactNode
 
--- FIXME foreign import javascript "React.createElement($1, $2, $3)"
-foreign import javascript "React.createElement($1, null, $3)"
+foreign import javascript "React.createElement($1, $2, $3)"
     js_React_createElement
         :: JSString
         -> JSRef props
@@ -54,28 +56,57 @@ foreign import javascript "React.createElement($1, null, $3)"
 foreign import javascript "document.getElementById($1)"
     getElementById :: JSString -> IO Element
 
-data ReactElement = ReactElement Text (Map Text Text) (Vector ReactNode)
+data ElemProps = ElemProps
+    { epStyle :: Map Text Text
+    , epOtherProps :: Map Text Text
+    -- ^ Cannot be: style, key
+    }
+    deriving Generic
+instance Hashable ElemProps where
+    hashWithSalt salt (ElemProps x y) = hashWithSalt salt (Map.toList x, Map.toList y)
+
+data ReactElement = ReactElement Int Text ElemProps (Vector ReactNode)
+
+reactElement :: Text -> ElemProps -> Vector ReactNode -> ReactElement
+reactElement name props children = ReactElement
+    (hash (name, props, V.toList $ V.map rnHash children))
+    name
+    props
+    children
+
 data ReactNode = RNElement ReactElement
-               | RNText Text
+               | RNText Int Text
+
+rnHash :: ReactNode -> Int
+rnHash (RNElement (ReactElement h _ _ _)) = h
+rnHash (RNText h _ ) = h
+
+nodeElement :: ReactElement -> ReactNode
+nodeElement = RNElement
+
+nodeText :: Text -> ReactNode
+nodeText t = RNText (hash t) t
 
 instance ToReactNode ReactNode where
     toReactNode (RNElement re) = toReactNode =<< toReactElem re
-    toReactNode (RNText t) = toReactNode t
+    toReactNode (RNText _ t) = toReactNode t
 
 toReactElem :: ReactElement -> IO ReactElement'
-toReactElem (ReactElement name props children) = join $ js_React_createElement
+toReactElem (ReactElement h name props children) = join $ js_React_createElement
     <$> pure (toJSString name)
-    <*> toPropsRef props
+    <*> toPropsRef h props
     <*> toReactNode children
 
-toPropsRef :: Map Text Text -> IO (JSRef (Map Text Text))
-toPropsRef = toJSRef_aeson
-{-
-toPropsRef m = do
+toPropsRef :: Int -> ElemProps -> IO (JSRef props)
+toPropsRef key (ElemProps style m) = do
     o <- newObj
     forM_ (Map.toList m) $ \(k, v) -> setProp k (toJSString v) o
+    key' <- toJSRef key
+    setProp ("key" :: JSString) key' o
+    unless (Map.null style) $ do
+        style' <- toJSRef_aeson style
+        setProp ("style" :: JSString) style' o
     return o
--}
 
 reactRender :: Element -> ReactElement -> IO ()
 reactRender dom re = do
@@ -85,8 +116,9 @@ reactRender dom re = do
 main :: IO ()
 main = do
     container <- getElementById "container"
-    reactRender container $ ReactElement "i" []
-        [ RNElement $ ReactElement "b" [("style", "text-decoration:underline")]
-            [ RNText "Hello World 3"
+    reactRender container $ reactElement "i" (ElemProps [] [])
+        [ nodeElement $ reactElement "b"
+            (ElemProps [("text-decoration", "underline")] [])
+            [ nodeText "Hello World 3"
             ]
         ]
