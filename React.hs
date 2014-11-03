@@ -18,9 +18,13 @@ import qualified Data.Vector as V
 import Data.Aeson
 import Data.Hashable
 import GHC.Generics (Generic)
+import qualified Data.Text as T
 
 data ReactElement_
 type ReactElement' = JSRef ReactElement_
+
+data ReactEvent_
+type ReactEvent = JSRef ReactEvent_
 
 data ReactNode_
 type ReactNode' = JSRef ReactNode_
@@ -58,12 +62,17 @@ foreign import javascript "document.getElementById($1)"
 
 data ElemProps = ElemProps
     { epStyle :: Map Text Text
+    , epEvents :: Map Text (Int, ReactEvent -> IO ())
     , epOtherProps :: Map Text Text
     -- ^ Cannot be: style, key
     }
     deriving Generic
 instance Hashable ElemProps where
-    hashWithSalt salt (ElemProps x y) = hashWithSalt salt (Map.toList x, Map.toList y)
+    hashWithSalt salt (ElemProps x y z) = hashWithSalt salt
+        ( Map.toList x
+        , Map.toList $ Map.map fst y
+        , Map.toList z
+        )
 
 data ReactElement = ReactElement Int Text ElemProps (Vector ReactNode)
 
@@ -98,7 +107,7 @@ toReactElem (ReactElement h name props children) = join $ js_React_createElement
     <*> toReactNode children
 
 toPropsRef :: Int -> ElemProps -> IO (JSRef props)
-toPropsRef key (ElemProps style m) = do
+toPropsRef key (ElemProps style events m) = do
     o <- newObj
     forM_ (Map.toList m) $ \(k, v) -> setProp k (toJSString v) o
     key' <- toJSRef key
@@ -106,7 +115,14 @@ toPropsRef key (ElemProps style m) = do
     unless (Map.null style) $ do
         style' <- toJSRef_aeson style
         setProp ("style" :: JSString) style' o
+    forM_ (Map.toList $ Map.map snd events) $ \(name, f) -> do
+        let name' = T.concat ["on", T.toUpper $ T.take 1 name, T.drop 1 name]
+        f' <- syncCallback1 AlwaysRetain True f
+        setProp name' f' o
     return o
+
+foreign import javascript "alert($1)"
+    alert :: JSString -> IO ()
 
 reactRender :: Element -> ReactElement -> IO ()
 reactRender dom re = do
@@ -116,9 +132,12 @@ reactRender dom re = do
 main :: IO ()
 main = do
     container <- getElementById "container"
-    reactRender container $ reactElement "i" (ElemProps [] [])
+    reactRender container $ reactElement "i" (ElemProps [] [] [])
         [ nodeElement $ reactElement "b"
-            (ElemProps [("textDecoration", "underline")] [])
+            (ElemProps
+                [("textDecoration", "underline")]
+                (Map.singleton "click" (0, const $ alert "Clicked!"))
+                [])
             [ nodeText "Hello World 3"
             ]
         ]
