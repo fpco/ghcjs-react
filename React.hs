@@ -90,7 +90,7 @@ instance Hashable ElemProps where
     hashWithSalt salt (ElemProps x y z) = hashWithSalt salt
         ( Map.toList x
         , Map.toList $ Map.map fst y
-        , Map.toList z
+        , Map.toList $ Map.delete "defaultValue" $ Map.delete "defaultChecked" z
         )
 
 -- | Used only in the ‘DSL’ to create a pure tree of elements.
@@ -104,7 +104,7 @@ data ReactElement =
 -- conversion to a JS ReactElement.
 reactElement :: Text -> ElemProps -> Vector ReactNode -> ReactElement
 reactElement name props children = ReactElement
-    (hash (name, props, V.toList $ V.map rnHash children))
+    (hash name) -- (hash (name, props)) -- NOTE: Not actually checking the values of children V.toList $ V.map rnHash children
     name
     props
     children
@@ -157,7 +157,7 @@ toPropsRef key (ElemProps style events m) = do
     o <- newObj
     forM_ (Map.toList m) $ \(k, v) -> setProp k (toJSString v) o
     key' <- toJSRef key
-    setProp ("key" :: JSString) key' o
+    setProp ("key" :: JSString) key' o -- FIXME do we need this? if we comment it out, then the background-color is never set to red below
     unless (Map.null style) $ do
         style' <- toJSRef_aeson style
         setProp ("style" :: JSString) style' o
@@ -181,7 +181,7 @@ class ToReactElement a where
     toReactElement :: TVar a -> a -> ReactElement
 
 -- | The app state that is rendered to a view.
-data MyState = MyState Int -- ^ A counter.
+data MyState = MyState Int Text -- ^ A counter.
     deriving Eq
 
 -- | Our main model renderer. Spits out:
@@ -203,21 +203,35 @@ data MyState = MyState Int -- ^ A counter.
 -- (judged by their hash).
 --
 instance ToReactElement MyState where
-    toReactElement var (MyState i) = reactElement "i" (ElemProps [] [] [])
+    toReactElement var (MyState i inputValue) = reactElement "i" (ElemProps [] [] [])
         [ nodeElement $ reactElement "b"
             (ElemProps
                 [("textDecoration", "underline")]
                 (Map.singleton "click" (i, const $ atomically $ do
-                    MyState i <- readTVar var
-                    writeTVar var $ MyState $ i + 1))
+                    MyState i inputValue' <- readTVar var
+                    writeTVar var $ MyState (i + 1) inputValue'))
                 [])
             [ nodeText $ "Total clicks: " `T.append` T.pack (show i)
+            , nodeText $ "Current value: " `T.append` inputValue
             ]
         , nodeElement $ reactElement "span"
             (ElemProps [] [] [])
             [ nodeText "This span should never be modified."
             ]
+        , nodeElement $ reactElement "input"
+            (ElemProps
+                (if T.null inputValue then [("background-color", "red")] else [])
+                [("change", (0, \e -> do
+                    let newVal = fromJSString $ getVal e
+                    print newVal
+                    atomically $ modifyTVar var $ (\(MyState i' _) -> MyState i' newVal)
+                    ))]
+                [("defaultValue", inputValue)])
+            []
         ]
+
+foreign import javascript "$1.target.value"
+    getVal :: ReactEvent -> JSString
 
 -- | Loop forever. Block on state updates; whenever state changes we
 -- do a re-render.
@@ -237,4 +251,48 @@ renderThread dom state0 = do
 main :: IO ()
 main = do
     container <- getElementById "container"
-    renderThread container $ MyState 0
+    renderThread container $ MyState 0 "original"
+
+{-
+
+var converter = new Showdown.converter();
+
+var MarkdownEditor = React.createClass({
+  getInitialState: function() {
+    return {value: 'Type some *markdown* here!', color: "blue"};
+  },
+  handleCheckbox : function() {
+    var s = this.state;
+    s.color = this.refs.checkbox.getDOMNode().checked ? "red" : "blue";
+    this.setState(s);
+  },
+  handleChange: function() {
+    this.setState({value: this.refs.textarea.getDOMNode().value,
+                   color: "red"
+                   });
+  },
+  render: function() {
+    return (
+      <div className="MarkdownEditor">
+        <h3>Input</h3>
+        <input ref="checkbox" type="checkbox" onChange={this.handleCheckbox}/>
+        <textarea
+          onChange={this.handleChange}
+          ref="textarea"
+          style={{backgroundColor: this.state.color}}
+          defaultValue={this.state.value} />
+        <h3>Output</h3>
+        <div
+          className="content"
+          dangerouslySetInnerHTML={{
+            __html: converter.makeHtml(this.state.value)
+          }}
+        />
+      </div>
+    );
+  }
+});
+
+React.render(<MarkdownEditor />, mountNode);
+
+-}
