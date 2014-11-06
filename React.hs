@@ -157,7 +157,7 @@ toPropsRef key (ElemProps style events m) = do
     o <- newObj
     forM_ (Map.toList m) $ \(k, v) -> setProp k (toJSString v) o
     key' <- toJSRef key
-    setProp ("key" :: JSString) key' o -- FIXME do we need this? if we comment it out, then the background-color is never set to red below
+    {-setProp ("key" :: JSString) key' o-} -- FIXME do we need this? if we comment it out, then the background-color is never set to red below
     unless (Map.null style) $ do
         style' <- toJSRef_aeson style
         setProp ("style" :: JSString) style' o
@@ -220,7 +220,7 @@ instance ToReactElement MyState where
             ]
         , nodeElement $ reactElement "input"
             (ElemProps
-                (if T.null inputValue then [("background-color", "red")] else [])
+                (if T.null inputValue then [("backgroundColor", "red")] else [])
                 [("change", (0, \e -> do
                     let newVal = fromJSString $ getVal e
                     print newVal
