@@ -168,9 +168,6 @@ toPropsRef key (ElemProps style events m) = do
     js_console_log o
     return o
 
-foreign import javascript "alert($1)"
-    alert :: JSString -> IO ()
-
 reactRender :: Element -> ReactElement -> IO ()
 reactRender dom re = do
     re' <- toReactElem re
@@ -228,6 +225,11 @@ instance ToReactElement MyState where
                     ))]
                 [("defaultValue", inputValue)])
             []
+        ,  nodeElement $ reactElement "button"
+            (ElemProps []
+                       [("click",(0,const (putStrLn ("Value: " ++ (T.unpack inputValue)))))]
+                       [])
+            [nodeText "Show the value"]
         ]
 
 foreign import javascript "$1.target.value"
