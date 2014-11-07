@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -16,7 +17,6 @@ import Data.Vector (Vector)
 import Control.Applicative
 import qualified Data.Vector as V
 import Data.Aeson
-import Data.Hashable
 import GHC.Generics (Generic)
 import qualified Data.Text as T
 import Control.Concurrent.STM
@@ -42,9 +42,6 @@ instance IsString ReactNode' where
 -- element serving as the container.
 foreign import javascript "React.render($1, $2)"
     js_React_render :: ReactElement' -> Element -> IO ()
-
-foreign import javascript "console.log(\"%o\",$1)"
-    js_console_log :: JSRef a -> IO ()
 
 -- Create a sort of sum type of various things that React will accept
 -- as a "node".
@@ -86,17 +83,10 @@ data ElemProps = ElemProps
     -- ^ Cannot be: style, key
     }
     deriving Generic
-instance Hashable ElemProps where
-    hashWithSalt salt (ElemProps x y z) = hashWithSalt salt
-        ( Map.toList x
-        , Map.toList $ Map.map fst y
-        , Map.toList $ Map.delete "defaultValue" $ Map.delete "defaultChecked" z
-        )
 
 -- | Used only in the ‘DSL’ to create a pure tree of elements.
 data ReactElement =
-  ReactElement Int                -- ^ Hash.
-               Text               -- ^ Name.
+  ReactElement Text               -- ^ Name.
                ElemProps          -- ^ Properties: style, events, generic.
                (Vector ReactNode) -- ^ Children.
 
@@ -104,7 +94,6 @@ data ReactElement =
 -- conversion to a JS ReactElement.
 reactElement :: Text -> ElemProps -> Vector ReactNode -> ReactElement
 reactElement name props children = ReactElement
-    (hash name) -- (hash (name, props)) -- NOTE: Not actually checking the values of children V.toList $ V.map rnHash children
     name
     props
     children
@@ -112,12 +101,7 @@ reactElement name props children = ReactElement
 -- | Also used for the DSL AFAICT, not produced directly, constructed
 -- via smart constructors.
 data ReactNode = RNElement ReactElement
-               | RNText Int Text
-
--- | Used for hashing the children of an element in 'reactElement'.
-rnHash :: ReactNode -> Int
-rnHash (RNElement (ReactElement h _ _ _)) = h
-rnHash (RNText h _ ) = h
+               | RNText Text
 
 -- | DSL smart-constructor.
 nodeElement :: ReactElement -> ReactNode
@@ -125,18 +109,18 @@ nodeElement = RNElement
 
 -- | DSL smart-constructor. Makes a hash of the text ahead of time.
 nodeText :: Text -> ReactNode
-nodeText t = RNText (hash t) t
+nodeText t = RNText t
 
 -- | I believe this is used in 'toReactElem'.
 instance ToReactNode ReactNode where
     toReactNode (RNElement re) = toReactNode =<< toReactElem re
-    toReactNode (RNText _ t) = toReactNode t
+    toReactNode (RNText t) = toReactNode t
 
 -- | Convert our DSL 'ReactElement' to a JS element.
 toReactElem :: ReactElement -> IO ReactElement'
-toReactElem (ReactElement h name props children) = join $ js_React_createElement
+toReactElem (ReactElement name props children) = join $ js_React_createElement
     <$> pure (toJSString name)
-    <*> toPropsRef h props
+    <*> toPropsRef props
     <*> toReactNode children
 
 -- | Create a JS object for the properties.
@@ -152,12 +136,10 @@ toReactElem (ReactElement h name props children) = join $ js_React_createElement
 --  onClick: <function>,
 --  style: {textDecoration: \"underline\"}}
 --
-toPropsRef :: Int -> ElemProps -> IO (JSRef props)
-toPropsRef key (ElemProps style events m) = do
+toPropsRef :: ElemProps -> IO (JSRef props)
+toPropsRef (ElemProps style events m) = do
     o <- newObj
     forM_ (Map.toList m) $ \(k, v) -> setProp k (toJSString v) o
-    key' <- toJSRef key
-    {-setProp ("key" :: JSString) key' o-} -- FIXME do we need this? if we comment it out, then the background-color is never set to red below
     unless (Map.null style) $ do
         style' <- toJSRef_aeson style
         setProp ("style" :: JSString) style' o
@@ -165,7 +147,6 @@ toPropsRef key (ElemProps style events m) = do
         let name' = T.concat ["on", T.toUpper $ T.take 1 name, T.drop 1 name]
         f' <- syncCallback1 AlwaysRetain True f
         setProp name' f' o
-    js_console_log o
     return o
 
 reactRender :: Element -> ReactElement -> IO ()
@@ -219,7 +200,7 @@ instance ToReactElement MyState where
             (ElemProps
                 (if T.null inputValue then [("backgroundColor", "red")] else [])
                 [("change", (0, \e -> do
-                    let newVal = fromJSString $ getVal e
+                    newVal <- getVal e
                     print newVal
                     atomically $ modifyTVar var $ (\(MyState i' _) -> MyState i' newVal)
                     ))]
@@ -232,8 +213,14 @@ instance ToReactElement MyState where
             [nodeText "Show the value"]
         ]
 
+-- | Get event val.
+getVal :: ReactEvent -> IO Text
+getVal ev =
+  do jstr <- getVal_ ev
+     return (T.pack (fromJSString jstr))
+
 foreign import javascript "$1.target.value"
-    getVal :: ReactEvent -> JSString
+    getVal_ :: ReactEvent -> IO JSString
 
 -- | Loop forever. Block on state updates; whenever state changes we
 -- do a re-render.
