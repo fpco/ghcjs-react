@@ -1,25 +1,32 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
-import GHCJS.Types
-import GHCJS.Marshal
-import GHCJS.DOM.Types (Element)
-import GHCJS.Foreign
-import Data.String (IsString (..))
-import Control.Monad
-import Data.Text (Text)
-import Data.Map (Map)
+import           Data.Functor.Identity
+import           Data.Monoid
+import           Control.Monad.Reader
+import           Control.Monad.State.Strict
+import           Data.HashMap.Strict (HashMap)
+import           GHCJS.Types
+import           GHCJS.Marshal
+import           GHCJS.DOM.Types (Element)
+import           GHCJS.Foreign
+import           Data.String (IsString (..))
+import           Control.Monad
+import           Data.Text (Text)
+import           Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Vector (Vector)
-import Control.Applicative
+import           Data.Vector (Vector)
+import           Control.Applicative
 import qualified Data.Vector as V
-import Data.Aeson
-import GHC.Generics (Generic)
+import           Data.Aeson
+import           GHC.Generics (Generic)
 import qualified Data.Text as T
-import Control.Concurrent.STM
+import           Control.Concurrent.STM
 
 -- | A virtual react element.
 data ReactElement_
@@ -78,7 +85,7 @@ foreign import javascript "document.getElementById($1)"
 -- handled specially just before converting to JS.
 data ElemProps = ElemProps
     { epStyle :: Map Text Text
-    , epEvents :: Map Text (Int, ReactEvent -> IO ())
+    , epEvents :: Map Text (ReactEvent -> IO ())
     , epOtherProps :: Map Text Text
     -- ^ Cannot be: style, key
     }
@@ -86,9 +93,15 @@ data ElemProps = ElemProps
 
 -- | Used only in the ‘DSL’ to create a pure tree of elements.
 data ReactElement =
-  ReactElement Text               -- ^ Name.
-               ElemProps          -- ^ Properties: style, events, generic.
-               (Vector ReactNode) -- ^ Children.
+  ReactElement {elemName :: Text                   -- ^ Name.
+               ,elemProps :: ElemProps             -- ^ Properties: style, events, generic.
+               ,elemChildren :: (Vector ReactNode) -- ^ Children.
+               }
+
+-- | Also used for the DSL AFAICT, not produced directly, constructed
+-- via smart constructors.
+data ReactNode = RNElement ReactElement
+               | RNText Text
 
 -- | Used in the DSL to conveniently create a react element ready for
 -- conversion to a JS ReactElement.
@@ -97,11 +110,6 @@ reactElement name props children = ReactElement
     name
     props
     children
-
--- | Also used for the DSL AFAICT, not produced directly, constructed
--- via smart constructors.
-data ReactNode = RNElement ReactElement
-               | RNText Text
 
 -- | DSL smart-constructor.
 nodeElement :: ReactElement -> ReactNode
@@ -143,7 +151,7 @@ toPropsRef (ElemProps style events m) = do
     unless (Map.null style) $ do
         style' <- toJSRef_aeson style
         setProp ("style" :: JSString) style' o
-    forM_ (Map.toList $ Map.map snd events) $ \(name, f) -> do
+    forM_ (Map.toList events) $ \(name, f) -> do
         let name' = T.concat ["on", T.toUpper $ T.take 1 name, T.drop 1 name]
         f' <- syncCallback1 AlwaysRetain True f
         setProp name' f' o
@@ -156,62 +164,47 @@ reactRender dom re = do
 
 -- | This seems to only be used for rendering the state, one instance.
 class ToReactElement a where
-    toReactElement :: TVar a -> a -> ReactElement
+    toReact :: a -> React a ()
 
 -- | The app state that is rendered to a view.
 data MyState = MyState Int Text -- ^ A counter.
     deriving Eq
 
--- | Our main model renderer. Spits out:
---
--- @
--- <div id=\"container\">
--- <i data-reactid=\".0\">
--- <b style=\"text-decoration:underline;\" data-reactid=\".0.$-1372681592\">
--- <span data-reactid=\".0.$-1372681592.0\">Total clicks: 0</span>
--- </b>
--- <span data-reactid=\".0.$1558243823\">
--- <span data-reactid=\".0.$1558243823.0\">This span should never be modified.</span>
--- </span>
--- </i>
--- </div>
--- @
---
--- Where the data-reactid will be changed when elements are changed
--- (judged by their hash).
---
+-- | Our main view.
 instance ToReactElement MyState where
-    toReactElement var (MyState i inputValue) = reactElement "i" (ElemProps [] [] [])
-        [ nodeElement $ reactElement "b"
-            (ElemProps
-                [("textDecoration", "underline")]
-                (Map.singleton "click" (i, const $ atomically $ do
-                    MyState i inputValue' <- readTVar var
-                    writeTVar var $ MyState (i + 1) inputValue'))
-                [])
-            [ nodeText $ "Total clicks: " `T.append` T.pack (show i)
-            , nodeText $ "Current value: " `T.append` inputValue
-            ]
-        , nodeElement $ reactElement "span"
-            (ElemProps [] [] [])
-            [ nodeText "This span should never be modified."
-            ]
-        , nodeElement $ reactElement "input"
-            (ElemProps
-                (if T.null inputValue then [("backgroundColor", "red")] else [])
-                [("change", (0, \e -> do
-                    newVal <- getVal e
-                    print newVal
-                    atomically $ modifyTVar var $ (\(MyState i' _) -> MyState i' newVal)
-                    ))]
-                [("defaultValue", inputValue)])
-            []
-        ,  nodeElement $ reactElement "button"
-            (ElemProps []
-                       [("click",(0,const (putStrLn ("Value: " ++ (T.unpack inputValue)))))]
-                       [])
-            [nodeText "Show the value"]
-        ]
+  toReact (MyState i txt) =
+    do build "p"
+             (do style [("textDecoration","underline")]
+                 on "click"
+                    (const (\var ->
+                              atomically
+                                (do MyState i txt <- readTVar var
+                                    writeTVar var (MyState (i + 1) txt))))
+                 "Total clicks: "
+                 text (T.pack (show i))
+                 ", current value: "
+                 text txt)
+       build "p" (build "span" "This span should never be modified.")
+       build "p"
+             (build "input"
+                    (do style (if T.null txt
+                                  then [("backgroundColor","red")]
+                                  else [])
+                        attrs [("defaultValue",txt)]
+                        on "change"
+                           (\e var ->
+                              do newTxt <- getVal e
+                                 atomically
+                                   (modifyTVar
+                                      var
+                                      (\(MyState x _) ->
+                                         MyState x newTxt)))))
+       build "p"
+             (build "button"
+                    (do on "click"
+                           (\_ _ ->
+                              putStrLn ("Value: " <> T.unpack txt))
+                        "Show the value"))
 
 -- | Get event val.
 getVal :: ReactEvent -> IO Text
@@ -224,16 +217,18 @@ foreign import javascript "$1.target.value"
 
 -- | Loop forever. Block on state updates; whenever state changes we
 -- do a re-render.
-renderThread dom state0 = do
-    var <- newTVarIO state0
-    let loop stateOld = do
-            reactRender dom (toReactElement var stateOld)
-            stateNew <- atomically $ do
-                stateNew <- readTVar var
-                check (stateOld /= stateNew)
-                return stateNew
-            loop stateNew
-    loop state0
+renderThread dom state0 =
+  do var <- newTVarIO state0
+     let loop stateOld =
+           do reactRender dom
+                          (unwrap (snd (runIdentity (runReactT "div" var (toReact stateOld)))))
+              stateNew <- atomically $
+                          do stateNew <- readTVar var
+                             check (stateOld /= stateNew)
+                             return stateNew
+              loop stateNew
+     loop state0
+  where unwrap (RNElement e) = e
 
 -- | Grab the container element used for rendering into and start the
 -- rendering loop.
@@ -242,46 +237,85 @@ main = do
     container <- getElementById "container"
     renderThread container $ MyState 0 "original"
 
-{-
+--------------------------------------------------------------------------------
+-- DSL
 
-var converter = new Showdown.converter();
+-- | React transformer.
+type ReactT state m = ReaderT (TVar state) (StateT ReactNode m)
 
-var MarkdownEditor = React.createClass({
-  getInitialState: function() {
-    return {value: 'Type some *markdown* here!', color: "blue"};
-  },
-  handleCheckbox : function() {
-    var s = this.state;
-    s.color = this.refs.checkbox.getDOMNode().checked ? "red" : "blue";
-    this.setState(s);
-  },
-  handleChange: function() {
-    this.setState({value: this.refs.textarea.getDOMNode().value,
-                   color: "red"
-                   });
-  },
-  render: function() {
-    return (
-      <div className="MarkdownEditor">
-        <h3>Input</h3>
-        <input ref="checkbox" type="checkbox" onChange={this.handleCheckbox}/>
-        <textarea
-          onChange={this.handleChange}
-          ref="textarea"
-          style={{backgroundColor: this.state.color}}
-          defaultValue={this.state.value} />
-        <h3>Output</h3>
-        <div
-          className="content"
-          dangerouslySetInnerHTML={{
-            __html: converter.makeHtml(this.state.value)
-          }}
-        />
-      </div>
-    );
-  }
-});
+-- | Pure react monad.
+type React state = ReactT state Identity
 
-React.render(<MarkdownEditor />, mountNode);
+instance (a ~ (),Monad m) => IsString (ReaderT (TVar state) (StateT ReactNode m) a) where
+  fromString = text . T.pack
 
--}
+-- | Modify the element in the state.
+--
+-- In the case the current node is text, this is a no-op. Given
+-- that the API doesn't have a way to `build' inside a Text,
+-- that's okay. We could GADT the ReactNode type to remove this
+-- case, but not worth it ATM.
+modifyEl :: Monad m => (ReactElement -> ReactElement) -> ReactT state m ()
+modifyEl f =
+  modify (\rn ->
+            case rn of
+              RNElement e -> RNElement (f e)
+              text -> text)
+
+-- | Modify properties of the element.
+modifyProps f =
+  modifyEl (\e -> e {elemProps = f (elemProps e)})
+
+-- | Run the react monad.
+runReactT :: Text -> TVar state -> ReactT state m a -> m (a,ReactNode)
+runReactT name var m = runStateT (runReaderT m var) init
+  where init =
+          (RNElement (ReactElement name
+                                   (ElemProps mempty mempty mempty)
+                                   mempty))
+
+--------------------------------------------------------------------------------
+-- Public DSL API
+
+-- | Build an element.
+build :: Monad m
+      => Text -> ReactT state m a -> ReactT state m a
+build name m =
+  do var <- ask
+     (a,child) <- ReaderT (const (StateT (\s ->
+                                            do r <- runReactT name var m
+                                               return (r,s))))
+     modifyEl (\e ->
+                 e {elemChildren = elemChildren e <> V.singleton child})
+     return a
+
+-- | Add some text to the current node's children.
+text :: Monad m
+          => Text -> ReactT state m ()
+text t =
+  modifyEl (\e -> e { elemChildren = elemChildren e <> V.singleton (RNText t)})
+
+-- | Add style. Does not overwrite existing keys.
+style :: Monad m => [(Text,Text)] -> ReactT state m ()
+style vs =
+  modifyProps
+    (\ep ->
+       ep {epStyle = epStyle ep `Map.union` Map.fromList vs})
+
+-- | Add attributes. Does not overwrite existing keys.
+attrs :: Monad m => [(Text,Text)] -> ReactT state m ()
+attrs vs =
+  modifyProps
+    (\ep ->
+       ep {epOtherProps = epOtherProps ep `Map.union` Map.fromList vs})
+
+-- | Add event handler. Does not overwrite existing keys.
+on :: Monad m => Text -> (ReactEvent -> TVar state -> IO ()) -> ReactT state m ()
+on name f =
+  do var <- ask
+     modifyProps
+       (\ep ->
+          ep {epEvents =
+                epEvents ep `Map.union`
+                Map.fromList
+                  [(name,\ev -> f ev var)]})
