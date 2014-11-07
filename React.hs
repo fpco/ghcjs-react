@@ -291,7 +291,7 @@ build name m =
 
 -- | Add some text to the current node's children.
 text :: Monad m
-          => Text -> ReactT state m ()
+     => Text -> ReactT state m ()
 text t =
   modifyEl (\e -> e { elemChildren = elemChildren e <> V.singleton (RNText t)})
 
