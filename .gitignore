@@ -9,3 +9,8 @@ cabal-dev
 .cabal-sandbox/
 cabal.sandbox.config
 cabal.config
+*.js_o
+*.js_hi
+*.jsexe
+.docker-sandbox
+.shake.database
