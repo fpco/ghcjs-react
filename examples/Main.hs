@@ -6,13 +6,9 @@
 
 module Main where
 
-
-
-
 import React
-import React.Internal
-
 import React.Ace
+import React.Internal
 
 -- | Application state.
 data State =
