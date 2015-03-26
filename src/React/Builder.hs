@@ -36,9 +36,9 @@ build :: Monad m
       -> ReactT state m a
 build name m =
   do var <- ask
-     (a,child) <- ReaderT (const (StateT (\s ->
-                                            do r <- runReactT name var m
-                                               return (r,s))))
+     (a,child) <- ReactT (ReaderT (const (StateT (\s ->
+                                             do r <- runReactT name var m
+                                                return (r,s)))))
      modifyEl (\e ->
                  e {elemChildren = elemChildren e <> V.singleton child})
      return a
@@ -53,21 +53,25 @@ buildComponent :: Monad m
                -> ReactT s m x
 buildComponent (Component cls) cursor m =
   do var <- ask
-     (a,child) <- ReaderT (const (StateT (\s ->
-                                            do r <- runReactT "tmp" var m
-                                               return (r,s))))
+     (a,child) <-
+       ReactT (ReaderT (const (StateT (\s ->
+                                         do r <-
+                                              runReactT "tmp" var m
+                                            return (r,s)))))
      -- The above is just used for running attributes. ^
-     modifyEl (\e ->
-                 e {elemChildren =
-                      elemChildren e <>
-                      V.singleton
-                        (RNComponent
-                           (ReactComponent cls
-                                           (getProps child)
-                                           (lensRef cursor)))})
+     modifyEl
+       (\e ->
+          e {elemChildren =
+               elemChildren e <>
+               V.singleton
+                 (RNComponent
+                    (ReactComponent cls
+                                    (getProps child)
+                                    (lensRef cursor)))})
      return a
   where getProps (RNElement (ReactElement "tmp" props _)) = props
-        getProps x = error ("getProps: unexpected case: " ++ show x)
+        getProps x =
+          error ("getProps: unexpected case: " ++ show x)
 
 -- | Add some text to the current node's children.
 text :: Monad m
@@ -107,5 +111,5 @@ attr name prop =
     (\ep ->
        ep {epOtherProps = epOtherProps ep `Map.union` Map.fromList [(name,prop)]})
 
-instance (a ~ (),Monad m) => IsString (ReaderT (TVar state) (StateT (ReactNode state) m) a) where
+instance (a ~ (),Monad m) => IsString (ReactT state m a) where
   fromString = text . T.pack

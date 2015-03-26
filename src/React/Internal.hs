@@ -16,6 +16,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | An Om-inspired API for React.js from Haskell.
 
@@ -24,8 +25,9 @@ module React.Internal where
 import           Control.Applicative
 import           Control.Concurrent.STM
 import           Control.Monad
-import           Control.Monad.Trans.Reader
+import           Control.Monad.Reader
 import           Control.Monad.State.Strict
+import           Control.Monad.Trans.Reader
 import           Data.Coerce
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
@@ -43,13 +45,13 @@ import           GHCJS.Compat
 import           React.Ref
 
 #ifdef __GHCJS__
-import JavaScript.JQuery (JQuery)
-import GHCJS.Types
-import GHCJS.Marshal
-import GHCJS.DOM
-import GHCJS.DOM.Element
-import GHCJS.DOM.Event
-import GHCJS.Foreign
+import           JavaScript.JQuery (JQuery)
+import           GHCJS.Types
+import           GHCJS.Marshal
+import           GHCJS.DOM
+import           GHCJS.DOM.Element
+import           GHCJS.DOM.Event
+import           GHCJS.Foreign
 #endif
 
 -- | An application with some state transforming over some monad.
@@ -324,7 +326,9 @@ class (Coercible ReactEvent event, Coercible event ReactEvent) => IsReactEvent e
 instance IsReactEvent ReactEvent
 
 -- | React transformer.
-type ReactT state m = ReaderT (TVar state) (StateT (ReactNode state) m)
+newtype ReactT state m a =
+  ReactT {unReactT :: ReaderT (TVar state) (StateT (ReactNode state) m) a}
+  deriving (Monad,MonadState (ReactNode state),Applicative,Functor,MonadReader (TVar state))
 
 -- | Pure react monad.
 type React state = ReactT state Identity
@@ -359,7 +363,7 @@ modifyProps f =
 
 -- | Run the react monad.
 runReactT :: Text -> TVar state -> ReactT state m a -> m (a,ReactNode state)
-runReactT name var m = runStateT (runReaderT m var) init
+runReactT name var m = runStateT (runReaderT (unReactT m) var) init
   where init =
           (RNElement (ReactElement name
                                    (ElemProps mempty mempty mempty)
