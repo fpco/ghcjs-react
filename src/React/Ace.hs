@@ -1,3 +1,4 @@
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -75,7 +76,7 @@ createAce app =
               (receivingProps app))
 
 -- | Setup the ace editor.
-didMount :: App a m -> Ref a Ace -> JQuery -> JSRef this -> IO ()
+didMount :: App a m -> Lens' a Ace -> JQuery -> JSRef this -> IO ()
 didMount app r el this =
   do props <- getProp ("props" :: JSString) this
      onClickFun <- getProp ("onClick" :: JSString) props
@@ -85,17 +86,17 @@ didMount app r el this =
                           onDblClickFun
      atomically
        (modifyTVar (appState app)
-                   (set (refLens r) (Ace (Just editor))))
+                   (set r (Ace (Just editor))))
 
 -- | New code attribute has been set, update the editor contents.
-receivingProps :: App state m -> Ref state Ace -> JSRef a -> IO ()
+receivingProps :: App state m -> Lens' state Ace -> JSRef a -> IO ()
 receivingProps app l props =
   do codeRef <- getProp ("code" :: JSString) props
      mcode <- fromJSRef codeRef
      case mcode of
        Nothing -> return ()
        Just (code :: JSString) ->
-         do Ace meditor <- fmap (view (refLens l))
+         do Ace meditor <- fmap (view l)
                                 (atomically (readTVar (appState app)))
             case meditor of
               Nothing -> return ()

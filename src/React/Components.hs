@@ -31,20 +31,20 @@ import           GHCJS.DOM.Event
 #endif
 
 -- | Make a new class spec.
-newClass :: App state m -- ^ Application.
-         -> (ReactT state m ()) -- ^ Rendering function.
-         -> (forall props. Ref state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
-         -> (forall props. Ref state cursor -> JSRef props -> IO ()) -- ^ Did update.
-         -> (forall props. Ref state cursor -> JSRef props -> IO Bool) -- ^ Should update?
-         -> (forall props. Ref state cursor -> JSRef props -> IO ()) -- ^ Receiving new props.
+newClass :: App state m                                                          -- ^ Application.
+         -> (ReactT state m ())                                                  -- ^ Rendering function.
+         -> (forall props. Lens' state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
+         -> (forall props. Lens' state cursor -> JSRef props -> IO ())           -- ^ Did update.
+         -> (forall props. Lens' state cursor -> JSRef props -> IO Bool)         -- ^ Should update?
+         -> (forall props. Lens' state cursor -> JSRef props -> IO ())           -- ^ Receiving new props.
          -> Class state cursor m
 newClass app render didMount didUpdate shouldUpdate recProps =
   Class app
         render
-        (\ref q p -> didMount ref q p)
-        (\ref p -> didUpdate ref p)
-        (\ref p -> shouldUpdate ref p)
-        (\ref p -> recProps ref p)
+        (\ref q p -> didMount (refLens ref) q p)
+        (\ref p -> didUpdate (refLens ref) p)
+        (\ref p -> shouldUpdate (refLens ref) p)
+        (\ref p -> recProps (refLens ref) p)
 
 -- | Get the app of the class.
 classApp :: Class state cursor m -> App state m
