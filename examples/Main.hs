@@ -35,6 +35,6 @@ render ace state =
   do build "div" (text "Hello, world!?")
      buildComponent
        ace
-       (Lens (\(State ace) -> fromJust ace)
-             (\ace state -> State (Just ace)))
+       (Ref (\(State ace) -> fromJust ace)
+            (\ace state -> State (Just ace)))
        (attr "code" "Hello, world!")

@@ -76,7 +76,7 @@ createAce app =
               (\_l _props -> return ())})
 
 -- | Setup the ace editor.
-didMount :: App a m -> Lens a Ace -> JQuery -> JSRef this -> IO ()
+didMount :: App a m -> Ref a Ace -> JQuery -> JSRef this -> IO ()
 didMount app l el this =
   do props <- getProp ("props" :: JSString) this
      onClickFun <- getProp ("onClick" :: JSString) props
@@ -89,7 +89,7 @@ didMount app l el this =
                    (putR l (Ace (Just editor))))
 
 -- | New code attribute has been set, update the editor contents.
-receivingProps :: App state m -> Lens state Ace -> JSRef a -> IO ()
+receivingProps :: App state m -> Ref state Ace -> JSRef a -> IO ()
 receivingProps app l props =
   do codeRef <- getProp ("code" :: JSString) props
      mcode <- fromJSRef codeRef

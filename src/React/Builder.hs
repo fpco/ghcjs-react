@@ -44,7 +44,7 @@ build name m =
 -- | Build a component.
 buildComponent :: Monad m
                => Component state cursor m -- ^ The component.
-               -> Lens state cursor       -- ^ A cursor into the state for this instance.
+               -> Ref state cursor       -- ^ A cursor into the state for this instance.
                -> ReactT state m a         -- ^ Set attributes for the
                                            -- component. Ignores content (for
                                            -- now).

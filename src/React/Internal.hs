@@ -62,7 +62,7 @@ data App state m =
 
 -- | State cursor.
 data Cursor =
-  forall cursor state. Cursor (Lens cursor state)
+  forall cursor state. Cursor (Ref cursor state)
 
 -- | A virtual react element.
 data ReactElement_
@@ -101,7 +101,7 @@ instance IsString ReactNode' where
 --  onClick: <function>,
 --  style: {textDecoration: \"underline\"}}
 --
-toPropsRef :: App state m -> ElemProps -> Maybe (Lens state cursor) -> IO (JSRef props)
+toPropsRef :: App state m -> ElemProps -> Maybe (Ref state cursor) -> IO (JSRef props)
 toPropsRef (App _ _ ints cursors) (ElemProps style events other) mlens = do
     o <- newObj
     forM_ (Map.toList other) $ \(k, v) ->
@@ -145,7 +145,7 @@ foreign import javascript "React.createElement($1, $2)"
     js_React_createElementFromClass
         :: ReactClass' state
         -> JSRef props
-        -> JSRef (Lens state cursor)
+        -> JSRef (Ref state cursor)
         -> IO ReactElement'
 foreign import javascript
     "React.createClass({ render: function(){ var x = {r:0}; $1(x); return x.r; }, componentDidMount: function(){ $2(jQuery(this.getDOMNode()),this); }, componentDidUpdate: function(){return $3(this)}, shouldComponentUpdate: function(){return $4(this)}, componentWillReceiveProps: function(news){return $5(this,news)} })"
@@ -164,7 +164,7 @@ js_React_props_cursor = undefined
 js_React_createElementFromClass
         :: ReactClass' state
         -> JSRef props
-        -> JSRef (Lens state cursor)
+        -> JSRef (Ref state cursor)
         -> IO ReactElement'
 js_React_createElementFromClass = undefined
 dom_a :: IO ReactElement'
@@ -233,7 +233,7 @@ instance Show (ReactClass' a) where
 data ReactComponent state = forall cursor.
   ReactComponent {compName :: ReactClass' cursor
                  ,compProps :: ElemProps
-                 ,compLens :: Lens state cursor}
+                 ,compRef :: Ref state cursor}
 
 deriving instance Show (ReactComponent state)
 
@@ -373,8 +373,8 @@ data Component state cursor (m :: * -> *) =
 data Class state cursor m =
   Class {classApp :: App state m                                                              -- ^ Application.
         ,classRender :: ReactT state m ()                                                     -- ^ Rendering function.
-        ,classDidMount :: (forall props. Lens state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
-        ,classDidUpdate :: (forall props. Lens state cursor -> JSRef props -> IO ())          -- ^ Did update.
-        ,classShouldUpdate :: (forall props. Lens state cursor -> JSRef props -> IO Bool)     -- ^ Should update?
-        ,classReceivingProps :: (forall props. Lens state cursor -> JSRef props -> IO ())     -- ^ Receiving new props.
+        ,classDidMount :: (forall props. Ref state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
+        ,classDidUpdate :: (forall props. Ref state cursor -> JSRef props -> IO ())          -- ^ Did update.
+        ,classShouldUpdate :: (forall props. Ref state cursor -> JSRef props -> IO Bool)     -- ^ Should update?
+        ,classReceivingProps :: (forall props. Ref state cursor -> JSRef props -> IO ())     -- ^ Receiving new props.
         }
