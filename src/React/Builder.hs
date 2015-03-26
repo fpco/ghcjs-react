@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Element builders.
 
@@ -18,6 +19,7 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import           React.Internal
 import           React.Ref
+import           React.Lens
 
 #ifdef __GHCJS__
 import           JavaScript.JQuery (JQuery)
@@ -43,12 +45,12 @@ build name m =
 
 -- | Build a component.
 buildComponent :: Monad m
-               => Component state cursor m -- ^ The component.
-               -> Ref state cursor       -- ^ A cursor into the state for this instance.
-               -> ReactT state m a         -- ^ Set attributes for the
-                                           -- component. Ignores content (for
-                                           -- now).
-               -> ReactT state m a
+               => Component s a m -- ^ The component.
+               -> Lens s s a a    -- ^ A cursor into the state for this instance.
+               -> ReactT s m x    -- ^ Set attributes for the
+                                  -- component. Ignores content (for
+                                  -- now).
+               -> ReactT s m x
 buildComponent (Component cls) cursor m =
   do var <- ask
      (a,child) <- ReaderT (const (StateT (\s ->
@@ -62,7 +64,7 @@ buildComponent (Component cls) cursor m =
                         (RNComponent
                            (ReactComponent cls
                                            (getProps child)
-                                           cursor))})
+                                           (lensRef cursor)))})
      return a
   where getProps (RNElement (ReactElement "tmp" props _)) = props
         getProps x = error ("getProps: unexpected case: " ++ show x)

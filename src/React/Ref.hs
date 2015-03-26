@@ -5,6 +5,9 @@
 {-# LANGUAGE CPP #-}
 
 -- | Functional reference.
+--
+-- GHCJS seems to be able to store and coerce this better than a bare
+-- CPS lens. To be investigated.
 
 module React.Ref where
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 -- | Example application.
@@ -15,13 +16,14 @@ import React.Ref
 
 -- | Application state.
 data State =
-  State { stateAce :: Maybe Ace }
+  State { stateAce :: Ace }
   deriving (Show,Eq)
 
 -- | Main entry point.
 main :: IO ()
 main =
-  do app <- makeApp (State Nothing) id
+  do aceState <- defaultAce
+     app <- makeApp (State aceState) id
      ace <- createAce app
      container <- getElementById "container"
      react app (render ace) container
@@ -35,6 +37,7 @@ render ace state =
   do build "div" (text "Hello, world!?")
      buildComponent
        ace
-       (Ref (\(State ace) -> fromJust ace)
-            (\ace state -> State (Just ace)))
+       (\f s ->
+          fmap (\a -> s {stateAce = a})
+               (f (stateAce s)))
        (attr "code" "Hello, world!")
