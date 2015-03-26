@@ -27,6 +27,7 @@ import GHCJS.Compat
 import React
 import React.Components
 import React.Internal
+import React.Lens
 import React.Ref
 
 #ifdef __GHCJS__
@@ -77,7 +78,7 @@ createAce app =
 
 -- | Setup the ace editor.
 didMount :: App a m -> Ref a Ace -> JQuery -> JSRef this -> IO ()
-didMount app l el this =
+didMount app r el this =
   do props <- getProp ("props" :: JSString) this
      onClickFun <- getProp ("onClick" :: JSString) props
      onDblClickFun <- getProp ("onDblClick" :: JSString) props
@@ -86,7 +87,7 @@ didMount app l el this =
                           onDblClickFun
      atomically
        (modifyTVar (appState app)
-                   (putR l (Ace (Just editor))))
+                   (set (refLens r) (Ace (Just editor))))
 
 -- | New code attribute has been set, update the editor contents.
 receivingProps :: App state m -> Ref state Ace -> JSRef a -> IO ()
@@ -96,7 +97,7 @@ receivingProps app l props =
      case mcode of
        Nothing -> return ()
        Just (code :: JSString) ->
-         do Ace meditor <- fmap (getR l)
+         do Ace meditor <- fmap (view (refLens l))
                                 (atomically (readTVar (appState app)))
             case meditor of
               Nothing -> return ()
