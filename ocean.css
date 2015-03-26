@@ -575,3 +575,60 @@ div#style-menu-holder {
 }
 
 /* @end */
+body { font-family: ubuntu; font-size: 14px }
+
+
+.no-frame #synopsis { position: relative; display: block }
+.no-frame #synopsis > .hide { display: block; }
+#synopsis .caption.collapser { display: none }
+#synopsis > .show > *,#synopsis > .show {
+  background: inherit;
+}
+.expander { display: none }
+#synopsis ul, #synopsis ul li.src {
+    background: inherit;
+}
+
+#package-header {
+ background: #352f44;
+  border:0;
+  color: #fff !important;
+  line-height: 30px
+}
+#package-header .caption {
+ color: #fff  !important;
+}
+a {
+  color: #005b89 !important
+}
+
+#package-header > ul > li > a {
+ color: #fff !important
+}
+#package-header > ul > li > a:hover {
+ color: #fff !important;
+  background: inherit;
+}
+#package-header .links li {
+ border: 0;
+}
+table.info { display: none }
+.caption { color: #6e618d!important }
+pre{ background: #f8f8f8; padding: 1em; }
+pre, pre * {  font-family: ubuntu mono  !important; font-size: 15px !important; }
+#table-of-contents {
+ 	background: #f8f8f8;
+  	border: 1px solid #eee;
+}
+.doc > .warning {
+   color: #c09853;
+padding: 0px 35px 0px 14px;
+margin-bottom: 20px;
+text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+background-color: #fcf8e3;
+border: 1px solid #fbeed5;
+-webkit-border-radius: 2px;
+-moz-border-radius: 2px;
+border-radius: 2px;
+
+}
