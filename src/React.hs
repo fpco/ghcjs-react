@@ -40,12 +40,13 @@ module React
     )
     where
 
-import Control.Concurrent.STM
-import Data.Monoid
-import GHCJS.Compat
 import React.Builder
 import React.Internal
 import React.Events
+
+import Control.Concurrent.STM
+import Data.Monoid
+import GHCJS.Compat
 
 #ifdef __GHCJS__
 import JavaScript.JQuery (JQuery)
