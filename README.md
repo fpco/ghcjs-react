@@ -5,16 +5,22 @@ React bindings for GHCJS
 
 ## Compile examples
 
-    fpbuild exec -- ghcjs -iexamples/ -isrc/ examples/Main.hs; cp examples/index.html examples/Main.jsexe/
+    ghcjs -iexamples/ -isrc/ examples/Main.hs
+    cp examples/index.html examples/Main.jsexe/
 
 ## Haddock
 
-    fpbuild exec -- haddock React React.Builder React.Events --optghc=-isrc -h
+    $ haddock React --optghc=-isrc -h
 
-## Miscellanous wizardry
+## Alternate means of building
 
-node Setup.jsexe/all.js clean
-node Setup.jsexe/all.js configure --user --ghcjs
-node Setup.jsexe/all.js build
-node Setup.jsexe/all.js copy
-node Setup.jsexe/all.js register
+If you have trouble with `cabal install --ghcjs`, you may instead try:
+
+    $ rm -r dist/
+    $ fpbuild exec -- ghcjs Setup.hs
+    $ node Setup.jsexe/all.js clean
+    $ node Setup.jsexe/all.js configure --user --ghcjs
+    $ node Setup.jsexe/all.js build
+    $ node Setup.jsexe/all.js copy
+    $ node Setup.jsexe/all.js register
+    $ node Setup.jsexe/all.js haddock
