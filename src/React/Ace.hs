@@ -66,15 +66,13 @@ createAce :: Monad m
           => App state m                -- ^ The app.
           -> IO (Component state Ace m) -- ^ Ace component.
 createAce app =
-  createClass
-    (Class {classApp = app
-           ,classRender = return ()
-           ,classDidMount = didMount app
-           ,classShouldUpdate =
+  createComponent
+    (newClass app
+              (return ())
+              (didMount app)
+              (\_l _props -> return ())
               (\_ _ -> return False)
-           ,classReceivingProps = receivingProps app
-           ,classDidUpdate =
-              (\_l _props -> return ())})
+              (receivingProps app))
 
 -- | Setup the ace editor.
 didMount :: App a m -> Ref a Ace -> JQuery -> JSRef this -> IO ()

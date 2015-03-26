@@ -371,10 +371,16 @@ data Component state cursor (m :: * -> *) =
 
 -- | Class used for creating components.
 data Class state cursor m =
-  Class {classApp :: App state m                                                              -- ^ Application.
-        ,classRender :: ReactT state m ()                                                     -- ^ Rendering function.
-        ,classDidMount :: (forall props. Ref state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
-        ,classDidUpdate :: (forall props. Ref state cursor -> JSRef props -> IO ())          -- ^ Did update.
-        ,classShouldUpdate :: (forall props. Ref state cursor -> JSRef props -> IO Bool)     -- ^ Should update?
-        ,classReceivingProps :: (forall props. Ref state cursor -> JSRef props -> IO ())     -- ^ Receiving new props.
+  Class {_classApp :: App state m
+        -- ^ Application.
+        ,_classRender :: ReactT state m ()
+        -- ^ Rendering function.
+        ,_classDidMount :: (forall props. Ref state cursor -> JQuery -> JSRef props -> IO ())
+        -- ^ Did mount handler.
+        ,_classDidUpdate :: (forall props. Ref state cursor -> JSRef props -> IO ())
+        -- ^ Did update.
+        ,_classShouldUpdate :: (forall props. Ref state cursor -> JSRef props -> IO Bool)
+        -- ^ Should update?
+        ,_classReceivingProps :: (forall props. Ref state cursor -> JSRef props -> IO ())
+        -- ^ Receiving new props.
         }

@@ -33,8 +33,10 @@ module React
     -- * Build components
     -- $components
     ,buildComponent
-    ,createClass
-    ,Class(..)
+    ,newClass
+    ,createComponent
+    ,Class
+    ,classApp
     -- * Handling events
     -- $events
     ,onEvent

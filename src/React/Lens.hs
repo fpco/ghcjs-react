@@ -8,6 +8,7 @@
 module React.Lens
   (-- * Lens type
    Lens
+  ,Lens'
    -- * Functions
   ,view
   ,set
@@ -66,6 +67,7 @@ import Control.Applicative
 -- @set l v (set l v s) ≡ set l v s@
 --
 type Lens s t a b = forall f. Functor f => (a -> f b) -> (s -> f t)
+type Lens' s a = Lens s s a a
 
 -- Internal id functor.
 newtype Id a = Id { runId :: a }
