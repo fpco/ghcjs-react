@@ -30,6 +30,11 @@ module React
     ,attr
     ,styles
     ,attrs
+    -- * Build components
+    -- $components
+    ,buildComponent
+    ,createClass
+    ,Class(..)
     -- * Handling events
     -- $events
     ,onEvent
@@ -41,6 +46,7 @@ module React
     where
 
 import React.Builder
+import React.Components
 import React.Internal
 import React.Events
 
@@ -165,6 +171,15 @@ getElementById = undefined
 --
 -- There are several basic building functions that you can use to
 -- render your reactive DOM tree.
+
+--------------------------------------------------------------------------------
+-- $components
+--
+-- A component is an element which manages its own state, but that
+-- state is managed by a 'Lens' into the main application state.
+--
+-- So when building a component with `buildComponent`, we pass in a
+-- lens which lens that component access the state.
 
 --------------------------------------------------------------------------------
 -- $events
