@@ -17,7 +17,7 @@ React bindings for GHCJS
 If you have trouble with `cabal install --ghcjs`, you may instead try:
 
     $ rm -r dist/
-    $ fpbuild exec -- ghcjs Setup.hs
+    $ ghcjs Setup.hs
     $ node Setup.jsexe/all.js clean
     $ node Setup.jsexe/all.js configure --user --ghcjs
     $ node Setup.jsexe/all.js build
