@@ -17,7 +17,6 @@ library
                        React.Internal
                        React.Ref
                        React.Events
-                       React.Ace
                        React.Components
   other-extensions:    GADTs
                        ExistentialQuantification
