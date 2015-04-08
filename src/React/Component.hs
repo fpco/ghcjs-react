@@ -87,7 +87,7 @@ createComponent cls =
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
                  Just (Cursor cursorc :: Cursor) ->
-                   do putStrLn ("Cursor: " ++ show cursor)
+                   do
                       _classDidMount cls
                                      (cursorToTraversal (unsafeCoerce cursorc))
                                      (maybe (error "didMount: Couldn't get jquery element...") id el)
@@ -105,7 +105,7 @@ createComponent cls =
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
                  Just (Cursor cursorc :: Cursor) ->
-                   do (putStrLn ("Cursor: " ++ show cursor))
+                   do
                       _classDidUpdate cls
                                       (cursorToTraversal (unsafeCoerce cursorc))
                                       ref
@@ -122,7 +122,7 @@ createComponent cls =
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
                  Just (Cursor cursorc :: Cursor) ->
-                   do (putStrLn ("Cursor: " ++ show cursor))
+                   do
                       _classShouldUpdate cls
                                          (cursorToTraversal (unsafeCoerce cursorc))
                                          ref
@@ -139,7 +139,7 @@ createComponent cls =
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
                  Just (Cursor cursorc :: Cursor) ->
-                   do (putStrLn ("Cursor: " ++ show cursor))
+                   do
                       _classReceivingProps cls
                                            (cursorToTraversal (unsafeCoerce cursorc))
                                            newprops
