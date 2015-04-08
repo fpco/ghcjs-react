@@ -1,3 +1,5 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,16 +8,17 @@
 
 -- |
 
-module React.Components where
+module React.Component where
 
+import           Control.Applicative
 import           Control.Concurrent.STM
+import           Control.Lens
 import           Control.Monad
 import qualified Data.HashMap.Strict as M
+import           Data.Typeable
 import           Debug.Trace
 import           GHCJS.Compat
 import           React.Builder
-import           React.Ref
-import           React.Lens
 import           React.Internal
 import           Unsafe.Coerce
 
@@ -33,18 +36,18 @@ import           GHCJS.DOM.Event
 -- | Make a new class spec.
 newClass :: App state m                                                          -- ^ Application.
          -> (ReactT state m ())                                                  -- ^ Rendering function.
-         -> (forall props. Lens' state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
-         -> (forall props. Lens' state cursor -> JSRef props -> IO ())           -- ^ Did update.
-         -> (forall props. Lens' state cursor -> JSRef props -> IO Bool)         -- ^ Should update?
-         -> (forall props. Lens' state cursor -> JSRef props -> IO ())           -- ^ Receiving new props.
+         -> (forall props. Traversal' state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())           -- ^ Did update.
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO Bool)         -- ^ Should update?
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())           -- ^ Receiving new props.
          -> Class state cursor m
 newClass app render didMount didUpdate shouldUpdate recProps =
   Class app
         render
-        (\ref q p -> didMount (refLens ref) q p)
-        (\ref p -> didUpdate (refLens ref) p)
-        (\ref p -> shouldUpdate (refLens ref) p)
-        (\ref p -> recProps (refLens ref) p)
+        (\t q p -> didMount t q p)
+        (\t p -> didUpdate t p)
+        (\t p -> shouldUpdate t p)
+        (\t p -> recProps t p)
 
 -- | Get the app of the class.
 classApp :: Class state cursor m -> App state m
@@ -64,7 +67,7 @@ createComponent cls =
                  appRun (_classApp cls)
                         (liftM snd
                                (runReactT "div"
-                                          (appState (_classApp cls))
+                                          (_classApp cls)
                                           (do attr "data-component" "true"
                                               (_classRender cls))))
                el' <-
@@ -83,13 +86,12 @@ createComponent cls =
                case M.lookup cursor cs of
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
-                 Just (Cursor cursor) ->
-                   case trace "didMountFun.unsafeCoerce" (unsafeCoerce cursor) of
-                     c ->
-                       _classDidMount cls
-                                      c
-                                      (maybe (error "didMount: Couldn't get jquery element...") id el)
-                                      ref
+                 Just (Cursor cursorc :: Cursor) ->
+                   do putStrLn ("Cursor: " ++ show cursor)
+                      _classDidMount cls
+                                     (cursorToTraversal (unsafeCoerce cursorc))
+                                     (maybe (error "didMount: Couldn't get jquery element...") id el)
+                                     ref
                return ())
      didUpdateFun <-
        syncCallback1
@@ -102,10 +104,11 @@ createComponent cls =
                case M.lookup cursor cs of
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
-                 Just (Cursor cursor) ->
-                   case trace "didUpdateFun.unsafeCoerce" (unsafeCoerce cursor) of
-                     c ->
-                       _classDidUpdate cls c ref
+                 Just (Cursor cursorc :: Cursor) ->
+                   do (putStrLn ("Cursor: " ++ show cursor))
+                      _classDidUpdate cls
+                                      (cursorToTraversal (unsafeCoerce cursorc))
+                                      ref
                return ())
      shouldUpdateFun <-
        syncCallback1
@@ -118,10 +121,11 @@ createComponent cls =
                case M.lookup cursor cs of
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
-                 Just (Cursor cursor) ->
-                   case trace "shouldUpdateFun.unsafeCoerce" (unsafeCoerce cursor) of
-                     c ->
-                       _classShouldUpdate cls c ref
+                 Just (Cursor cursorc :: Cursor) ->
+                   do (putStrLn ("Cursor: " ++ show cursor))
+                      _classShouldUpdate cls
+                                         (cursorToTraversal (unsafeCoerce cursorc))
+                                         ref
                return ())
      willRecPropsFun <-
        syncCallback2
@@ -134,10 +138,11 @@ createComponent cls =
                case M.lookup cursor cs of
                  Nothing ->
                    error ("Couldn't find cursor: " ++ show cursor)
-                 Just (Cursor cursor) ->
-                   case trace "willRecPropsFun.unsafeCoerce" (unsafeCoerce cursor) of
-                     c ->
-                       _classReceivingProps cls c newprops
+                 Just (Cursor cursorc :: Cursor) ->
+                   do (putStrLn ("Cursor: " ++ show cursor))
+                      _classReceivingProps cls
+                                           (cursorToTraversal (unsafeCoerce cursorc))
+                                           newprops
                return ())
      n <-
        js_React_createClass renderFun didMountFun didUpdateFun shouldUpdateFun willRecPropsFun

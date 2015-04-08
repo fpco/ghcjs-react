@@ -48,9 +48,9 @@ module React
     where
 
 import React.Builder
-import React.Components
+import React.Component
 import React.Internal
-import React.Events
+import React.Event
 
 import Control.Concurrent.STM
 import Data.Monoid
@@ -90,7 +90,7 @@ react :: (Show state,Eq state)
 react app@(App var run _ _) render dom =
   do let loop stateOld =
            do node <-
-                run (runReactT "div" var (render stateOld))
+                run (runReactT "div" app (render stateOld))
               reactRender app
                           dom
                           (snd node)

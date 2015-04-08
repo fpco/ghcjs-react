@@ -22,13 +22,13 @@ module React.Ace
   where
 
 import Control.Concurrent.STM
+import Control.Lens
 import Control.Monad
 import GHC.Exts
 import GHCJS.Compat
 import React
 import React.Components
 import React.Internal
-import React.Lens
 import React.Ref
 
 #ifdef __GHCJS__

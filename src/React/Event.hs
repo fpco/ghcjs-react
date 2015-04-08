@@ -5,7 +5,7 @@
 
 -- |
 
-module React.Events where
+module React.Event where
 
 import           Control.Concurrent.STM (TVar, check, atomically, readTVar, modifyTVar)
 import           Control.Monad.Reader (ReaderT(..), MonadReader(ask))
@@ -36,13 +36,13 @@ onEvent (EventListener name) f = onRaw name $ \re var -> f (coerce re) var
 -- | Add event handler. Does not overwrite existing keys.
 onRaw :: Monad m => Text -> (ReactEvent -> TVar state -> IO ()) -> ReactT state m ()
 onRaw name f =
-  do var <- ask
+  do app <- ask
      modifyProps
        (\ep ->
           ep {epEvents =
                 epEvents ep `Map.union`
                 Map.fromList
-                  [(name,\ev -> f ev var)]})
+                  [(name,\ev -> f ev (appState app))]})
 
 bubbles :: IsReactEvent event => event -> IO Bool
 bubbles = getPropBool "bubbles" . coerce

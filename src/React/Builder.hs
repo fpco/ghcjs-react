@@ -1,3 +1,4 @@
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -8,7 +9,9 @@
 
 module React.Builder where
 
+import           Control.Applicative
 import           Control.Concurrent.STM
+import           Control.Lens
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 import qualified Data.Map as Map
@@ -18,8 +21,6 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import           React.Internal
-import           React.Ref
-import           React.Lens
 
 #ifdef __GHCJS__
 import           JavaScript.JQuery (JQuery)
@@ -44,21 +45,22 @@ build name m =
      return a
 
 -- | Build a component.
-buildComponent :: Monad m
+buildComponent :: (Monad m,MonadIO m)
                => Component s a m -- ^ The component.
-               -> Lens s s a a    -- ^ A cursor into the state for this instance.
+               -> Traversal' s a  -- ^ A cursor into the state for this instance.
                -> ReactT s m x    -- ^ Set attributes for the
                                   -- component. Ignores content (for
                                   -- now).
                -> ReactT s m x
 buildComponent (Component cls) cursor m =
-  do var <- ask
+  do app <- ask
      (a,child) <-
        ReactT (ReaderT (const (StateT (\s ->
                                          do r <-
-                                              runReactT "tmp" var m
+                                              runReactT "tmp" app m
                                             return (r,s)))))
      -- The above is just used for running attributes. ^
+     cursorId <- liftIO (genCursor app (traversalToCursor cursor))
      modifyEl
        (\e ->
           e {elemChildren =
@@ -67,7 +69,7 @@ buildComponent (Component cls) cursor m =
                  (RNComponent
                     (ReactComponent cls
                                     (getProps child)
-                                    (lensRef cursor)))})
+                                    cursorId))})
      return a
   where getProps (RNElement (ReactElement "tmp" props _)) = props
         getProps x =

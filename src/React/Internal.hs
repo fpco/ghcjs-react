@@ -24,6 +24,7 @@ module React.Internal where
 
 import           Control.Applicative
 import           Control.Concurrent.STM
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
@@ -42,7 +43,6 @@ import           Data.Vector (Vector)
 import qualified Data.Vector as V
 import           GHC.Generics
 import           GHCJS.Compat
-import           React.Ref
 
 #ifdef __GHCJS__
 import           JavaScript.JQuery (JQuery)
@@ -64,7 +64,19 @@ data App state m =
 
 -- | State cursor.
 data Cursor =
-  forall cursor state. Cursor (Ref cursor state)
+  forall s a. Cursor ((a -> s -> s),(s -> Maybe a))
+
+-- | Convert a traversal to an opaque but unambiguous typed cursor.
+traversalToCursor :: Traversal' s a -> Cursor
+traversalToCursor t =
+  Cursor ((\a s -> set t a s),(preview t))
+
+-- | Convert a cursor pair to a traversal.
+cursorToTraversal :: ((a -> s -> s),(s -> Maybe a)) -> Traversal' s a
+cursorToTraversal (update,get) f s =
+  case get s of
+    Just a -> fmap (\a' -> update a' s) (f a)
+    Nothing -> pure s
 
 -- | A virtual react element.
 data ReactElement_
@@ -103,8 +115,8 @@ instance IsString ReactNode' where
 --  onClick: <function>,
 --  style: {textDecoration: \"underline\"}}
 --
-toPropsRef :: App state m -> ElemProps -> Maybe (Ref state cursor) -> IO (JSRef props)
-toPropsRef (App _ _ ints cursors) (ElemProps style events other) mlens = do
+toPropsRef :: App state m -> ElemProps -> Maybe Int -> IO (JSRef props)
+toPropsRef (App _ _ ints cursors) (ElemProps style events other) mcursorId = do
     o <- newObj
     forM_ (Map.toList other) $ \(k, v) ->
         setProp k (toJSString v) o
@@ -115,10 +127,9 @@ toPropsRef (App _ _ ints cursors) (ElemProps style events other) mlens = do
         let name' = T.concat ["on", T.toUpper $ T.take 1 name, T.drop 1 name]
         f' <- syncCallback1 AlwaysRetain True f
         setProp name' f' o
-    case mlens of
+    case mcursorId of
       Nothing -> return ()
-      Just lens -> do
-          cursorId <- genCursor ints cursors (Cursor lens)
+      Just cursorId -> do
           lensr <- toJSRef (cursorId :: Int)
           setProp ("cursor" :: JSString) lensr o
     return o
@@ -147,7 +158,7 @@ foreign import javascript "React.createElement($1, $2)"
     js_React_createElementFromClass
         :: ReactClass' state
         -> JSRef props
-        -> JSRef (Ref state cursor)
+        -> Int
         -> IO ReactElement'
 foreign import javascript
     "React.createClass({ render: function(){ var x = {r:0}; $1(x); return x.r; }, componentDidMount: function(){ $2(jQuery(this.getDOMNode()),this); }, componentDidUpdate: function(){return $3(this)}, shouldComponentUpdate: function(){return $4(this)}, componentWillReceiveProps: function(news){return $5(this,news)} })"
@@ -166,7 +177,7 @@ js_React_props_cursor = undefined
 js_React_createElementFromClass
         :: ReactClass' state
         -> JSRef props
-        -> JSRef (Ref state cursor)
+        -> Int
         -> IO ReactElement'
 js_React_createElementFromClass = undefined
 dom_a :: IO ReactElement'
@@ -235,7 +246,7 @@ instance Show (ReactClass' a) where
 data ReactComponent state = forall cursor.
   ReactComponent {compName :: ReactClass' cursor
                  ,compProps :: ElemProps
-                 ,compRef :: Ref state cursor}
+                 ,compRef :: Int}
 
 deriving instance Show (ReactComponent state)
 
@@ -263,24 +274,21 @@ toReactElem app rn =
       pure (toJSString name) <*>
       toPropsRef app props Nothing <*>
       toReactNode app children
-    RNComponent (ReactComponent cls props lens) ->
+    RNComponent (ReactComponent cls props cursorId) ->
       do {-putStrLn ("RNComponent " ++ "<ReactClass'> " ++ show props)-}
          (join $
           js_React_createElementFromClass <$>
           pure cls <*>
-          toPropsRef app props (Just lens) <*>
-          toJSRef lens)
+          toPropsRef app props (Just cursorId) <*>
+          pure cursorId)
     RNText t -> error ":-("
 
-genCursor :: TVar Int
-          -> TVar (HashMap Int Cursor)
-          -> Cursor
-          -> IO Int
-genCursor ints cursors cursor =
+genCursor :: App state m -> Cursor -> IO Int
+genCursor app cursor =
   atomically
-    (do i <- readTVar ints
-        modifyTVar ints (+ 1)
-        modifyTVar cursors (M.insert i cursor)
+    (do i <- readTVar (appIdSource app)
+        modifyTVar (appIdSource app) (+ 1)
+        modifyTVar (appCursors app) (M.insert i cursor)
         return i)
 
 #ifdef __GHCJS__
@@ -327,8 +335,8 @@ instance IsReactEvent ReactEvent
 
 -- | React transformer.
 newtype ReactT state m a =
-  ReactT {unReactT :: ReaderT (TVar state) (StateT (ReactNode state) m) a}
-  deriving (Monad,MonadState (ReactNode state),Applicative,Functor,MonadReader (TVar state))
+  ReactT {unReactT :: ReaderT (App state m) (StateT (ReactNode state) m) a}
+  deriving (Monad,MonadState (ReactNode state),Applicative,Functor,MonadReader (App state m),MonadIO)
 
 -- | Pure react monad.
 type React state = ReactT state Identity
@@ -362,8 +370,8 @@ modifyProps f =
               RNText{} -> s)
 
 -- | Run the react monad.
-runReactT :: Text -> TVar state -> ReactT state m a -> m (a,ReactNode state)
-runReactT name var m = runStateT (runReaderT (unReactT m) var) init
+runReactT :: Text -> App state m -> ReactT state m a -> m (a,ReactNode state)
+runReactT name app m = runStateT (runReaderT (unReactT m) app) init
   where init =
           (RNElement (ReactElement name
                                    (ElemProps mempty mempty mempty)
@@ -379,12 +387,12 @@ data Class state cursor m =
         -- ^ Application.
         ,_classRender :: ReactT state m ()
         -- ^ Rendering function.
-        ,_classDidMount :: (forall props. Ref state cursor -> JQuery -> JSRef props -> IO ())
+        ,_classDidMount :: (forall props. Traversal' state cursor -> JQuery -> JSRef props -> IO ())
         -- ^ Did mount handler.
-        ,_classDidUpdate :: (forall props. Ref state cursor -> JSRef props -> IO ())
+        ,_classDidUpdate :: (forall props. Traversal' state cursor -> JSRef props -> IO ())
         -- ^ Did update.
-        ,_classShouldUpdate :: (forall props. Ref state cursor -> JSRef props -> IO Bool)
+        ,_classShouldUpdate :: (forall props. Traversal' state cursor -> JSRef props -> IO Bool)
         -- ^ Should update?
-        ,_classReceivingProps :: (forall props. Ref state cursor -> JSRef props -> IO ())
+        ,_classReceivingProps :: (forall props. Traversal' state cursor -> JSRef props -> IO ())
         -- ^ Receiving new props.
         }

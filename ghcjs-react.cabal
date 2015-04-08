@@ -15,9 +15,10 @@ cabal-version:       >=1.10
 library
   exposed-modules:     React
                        React.Internal
-                       React.Ref
-                       React.Events
-                       React.Components
+                       React.Event
+                       React.Component
+                       React.Builder
+                       GHCJS.Compat
   other-extensions:    GADTs
                        ExistentialQuantification
                        MultiParamTypeClasses
@@ -42,6 +43,7 @@ library
                        vector,
                        unordered-containers,
                        stm,
-                       text, ghcjs-dom, ghcjs-base, ghcjs-jquery
+                       text, ghcjs-dom, ghcjs-base, ghcjs-jquery,
+                       lens
   hs-source-dirs:      src
   default-language:    Haskell2010
