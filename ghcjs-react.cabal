@@ -18,6 +18,7 @@ library
                        React.Event
                        React.Component
                        React.Builder
+                       React.Lucid
                        GHCJS.Compat
   other-extensions:    GADTs
                        ExistentialQuantification

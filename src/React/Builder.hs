@@ -4,13 +4,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Element builders.
 
 module React.Builder where
 
-import           Control.Applicative
-import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict

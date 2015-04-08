@@ -10,13 +10,11 @@
 
 module React.Component where
 
-import           Control.Applicative
+
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad
 import qualified Data.HashMap.Strict as M
-import           Data.Typeable
-import           Debug.Trace
 import           GHCJS.Compat
 import           React.Builder
 import           React.Internal

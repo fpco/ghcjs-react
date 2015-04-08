@@ -24,13 +24,13 @@ module React.Internal where
 
 import           Control.Applicative
 import           Control.Concurrent.STM
-import           Control.Lens
+import           Control.Lens hiding (children)
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader
 import           Data.Coerce
-import           Data.Functor.Identity
+
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
 import           Data.Map.Strict (Map)
@@ -73,8 +73,8 @@ traversalToCursor t =
 
 -- | Convert a cursor pair to a traversal.
 cursorToTraversal :: ((a -> s -> s),(s -> Maybe a)) -> Traversal' s a
-cursorToTraversal (update,get) f s =
-  case get s of
+cursorToTraversal (update,getting) f s =
+  case getting s of
     Just a -> fmap (\a' -> update a' s) (f a)
     Nothing -> pure s
 
@@ -116,7 +116,7 @@ instance IsString ReactNode' where
 --  style: {textDecoration: \"underline\"}}
 --
 toPropsRef :: App state m -> ElemProps -> Maybe Int -> IO (JSRef props)
-toPropsRef (App _ _ ints cursors) (ElemProps style events other) mcursorId = do
+toPropsRef _ (ElemProps style events other) mcursorId = do
     o <- newObj
     forM_ (Map.toList other) $ \(k, v) ->
         setProp k (toJSString v) o
@@ -260,7 +260,7 @@ data ReactNode state
 
 -- | I believe this is used in 'toReactElem'.
 instance ToReactNode state (ReactNode state) where
-    toReactNode app re@RNElement{} = toReactNode app =<< toReactElem app re
+    toReactNode app re'@RNElement{} = toReactNode app =<< toReactElem app re'
     toReactNode app (RNText t) = toReactNode app t
     toReactNode app c@RNComponent{} = toReactNode app =<< toReactElem app c
 
@@ -281,7 +281,7 @@ toReactElem app rn =
           pure cls <*>
           toPropsRef app props (Just cursorId) <*>
           pure cursorId)
-    RNText t -> error ":-("
+    RNText _ -> error "Unexpected RNText in toReactElem."
 
 genCursor :: App state m -> Cursor -> IO Int
 genCursor app cursor =
@@ -371,8 +371,8 @@ modifyProps f =
 
 -- | Run the react monad.
 runReactT :: Text -> App state m -> ReactT state m a -> m (a,ReactNode state)
-runReactT name app m = runStateT (runReaderT (unReactT m) app) init
-  where init =
+runReactT name app m = runStateT (runReaderT (unReactT m) app) init'
+  where init' =
           (RNElement (ReactElement name
                                    (ElemProps mempty mempty mempty)
                                    mempty))
