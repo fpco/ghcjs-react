@@ -269,13 +269,13 @@ toReactElem :: App state m -> ReactNode state -> IO ReactElement'
 toReactElem app rn =
   case rn of
     RNElement (ReactElement name props children) ->
-      join $
-      js_React_createElement <$>
-      pure (toJSString name) <*>
-      toPropsRef app props Nothing <*>
-      toReactNode app children
+      do (join $
+          js_React_createElement <$>
+          pure (toJSString name) <*>
+          toPropsRef app props Nothing <*>
+          toReactNode app children)
     RNComponent (ReactComponent cls props cursorId) ->
-      do {-putStrLn ("RNComponent " ++ "<ReactClass'> " ++ show props)-}
+      do putStrLn "RNComponent" -- FIXME: Removing this line causes a runtime exception. Seriously.
          (join $
           js_React_createElementFromClass <$>
           pure cls <*>
