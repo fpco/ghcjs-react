@@ -32,12 +32,23 @@ import           GHCJS.DOM.Event
 #endif
 
 -- | Make a new class spec.
-newClass :: App state m                                                          -- ^ Application.
-         -> (ReactT state m ())                                                  -- ^ Rendering function.
-         -> (forall props. Traversal' state cursor -> JQuery -> JSRef props -> IO ()) -- ^ Did mount handler.
-         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())           -- ^ Did update.
-         -> (forall props. Traversal' state cursor -> JSRef props -> IO Bool)         -- ^ Should update?
-         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())           -- ^ Receiving new props.
+newClass :: App state m
+            -- ^ Application.
+         -> (ReactT state m ())
+            -- ^ Rendering function.
+            -- https://facebook.github.io/react/docs/component-specs.html#render
+         -> (forall props. Traversal' state cursor -> JQuery -> JSRef props -> IO ())
+            -- ^ Did mount handler.
+            -- https://facebook.github.io/react/docs/component-specs.html#mounting-componentdidmount
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())
+            -- ^ Did update.
+            -- https://facebook.github.io/react/docs/component-specs.html#updating-componentdidupdate
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO Bool)
+            -- ^ Should update?
+            -- https://facebook.github.io/react/docs/component-specs.html#updating-shouldcomponentupdate
+         -> (forall props. Traversal' state cursor -> JSRef props -> IO ())
+            -- ^ Receiving new props.
+            -- https://facebook.github.io/react/docs/component-specs.html#updating-componentwillreceiveprops
          -> Class state cursor m
 newClass app render didMount didUpdate shouldUpdate recProps =
   Class app
