@@ -59,7 +59,7 @@ buildComponent (Component cls) cursor m =
                                               runReactT "tmp" app m
                                             return (r,s)))))
      -- The above is just used for running attributes. ^
-     cursorId <- liftIO (genCursor app (traversalToCursor cursor))
+     cursorId <- internalLiftIOReact (genCursor app (traversalToCursor cursor))
      modifyEl
        (\e ->
           e {elemChildren =

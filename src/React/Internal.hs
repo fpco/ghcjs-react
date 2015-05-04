@@ -336,7 +336,17 @@ instance IsReactEvent ReactEvent
 -- | React transformer.
 newtype ReactT state m a =
   ReactT {unReactT :: ReaderT (App state m) (StateT (ReactNode state) m) a}
-  deriving (Monad,MonadState (ReactNode state),Applicative,Functor,MonadReader (App state m),MonadIO)
+  deriving (Monad,MonadState (ReactNode state),Applicative,Functor,MonadReader (App state m))
+
+-- Instead of having instances for MonadIO / MonadTrans, we have these
+-- functions.  This is because ideally we want the user to think about
+-- ReactT functions being pure.
+
+internalLiftIOReact :: MonadIO m => IO a -> ReactT state m a
+internalLiftIOReact m = ReactT $ liftIO m
+
+internalLiftReact :: Monad m => m a -> ReactT state m a
+internalLiftReact m = ReactT $ lift $ lift m
 
 -- | Pure react monad.
 type React state = ReactT state Identity
