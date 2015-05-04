@@ -93,6 +93,10 @@ class_ :: Monad m
        => Text -> ReactT state m ()
 class_ = attr "className"
 
+id_ :: Monad m
+    => Text -> ReactT state m ()
+id_ = attr "id"
+
 src_ :: Monad m
      => Text -> ReactT state m ()
 src_ = attr "src"
