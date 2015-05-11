@@ -110,7 +110,16 @@ attr :: Monad m
 attr name prop =
   modifyProps
     (\ep ->
-       ep {epOtherProps = epOtherProps ep `Map.union` Map.fromList [(name,prop)]})
+       ep {epOtherProps = Map.insert name prop (epOtherProps ep)})
+
+refAttr :: Monad m
+        => Text -- ^ Name.
+        -> JSRef a -- ^ Value.
+        -> ReactT state m ()
+refAttr name val =
+  modifyProps
+    (\ep ->
+       ep {epRefProps = Map.insert name (RefProp val) (epRefProps ep)})
 
 instance (a ~ (),Monad m) => IsString (ReactT state m a) where
   fromString = text . T.pack

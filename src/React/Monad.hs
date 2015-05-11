@@ -155,10 +155,7 @@ modifyProps f =
 -- | Run the react monad.
 runReactT :: Text -> TVar state -> ReactT state m a -> m (a,ReactNode state)
 runReactT name var m = runStateT (runReaderT m var) init
-  where init =
-          (RNElement (ReactElement name
-                                   (ElemProps mempty mempty mempty)
-                                   mempty))
+  where init = RNElement (ReactElement name mempty mempty
 
 -- | A component for some state transforming over some monad.
 data Component state cursor (m :: * -> *) =

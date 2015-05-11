@@ -116,7 +116,7 @@ instance IsString ReactNode' where
 --  style: {textDecoration: \"underline\"}}
 --
 toPropsRef :: App state m -> ElemProps -> Maybe Int -> IO (JSRef props)
-toPropsRef _ (ElemProps style events other) mcursorId = do
+toPropsRef _ (ElemProps style events other refs) mcursorId = do
     o <- newObj
     forM_ (Map.toList other) $ \(k, v) ->
         setProp k (toJSString v) o
@@ -127,6 +127,8 @@ toPropsRef _ (ElemProps style events other) mcursorId = do
         let name' = T.concat ["on", T.toUpper $ T.take 1 name, T.drop 1 name]
         f' <- syncCallback1 AlwaysRetain True f
         setProp name' f' o
+    forM_ (Map.toList refs) $ \(k, RefProp v) ->
+        setProp k v o
     case mcursorId of
       Nothing -> return ()
       Just cursorId -> do
@@ -155,10 +157,14 @@ foreign import javascript "React.createElement($1, $2, $3)"
         -> ReactNode'
         -> IO ReactElement'
 foreign import javascript "React.createElement($1, $2)"
+    js_React_createElement_no_children
+        :: JSString
+        -> JSRef props
+        -> IO ReactElement'
+foreign import javascript "React.createElement($1, $2)"
     js_React_createElementFromClass
         :: ReactClass' state
         -> JSRef props
-        -> Int
         -> IO ReactElement'
 foreign import javascript
     "React.createClass({ render: function(){ var x = {r:0}; $1(x); return x.r; }, componentDidMount: function(){ $2(jQuery(this.getDOMNode()),this); }, componentDidUpdate: function(){return $3(this)}, shouldComponentUpdate: function(){return $4(this)}, componentWillReceiveProps: function(news){return $5(this,news)} })"
@@ -225,11 +231,26 @@ data ElemProps = ElemProps
     , epEvents :: Map Text (ReactEvent -> IO ())
     , epOtherProps :: Map Text Text
     -- ^ Cannot be: style, key
+    , epRefProps :: Map Text RefProp
     }
     deriving (Generic,Show)
 
+data RefProp = forall a. RefProp (JSRef a)
+
+instance Show RefProp where
+    show _ = "<RefProp>"
+
 instance Show (ReactEvent -> IO ()) where
     show _ = "<ReactEvent -> IO ()>"
+
+instance Monoid ElemProps where
+    mempty = ElemProps mempty mempty mempty mempty
+    mappend x y = ElemProps
+        { epStyle = epStyle x <> epStyle y
+        , epEvents = epEvents x <> epEvents y
+        , epOtherProps = epOtherProps x <> epOtherProps y
+        , epRefProps = epRefProps x <> epRefProps y
+        }
 
 -- | Used only in the ‘DSL’ to create a pure tree of elements.
 data ReactElement state =
@@ -270,17 +291,23 @@ toReactElem app rn =
   case rn of
     RNElement (ReactElement name props children) ->
       do (join $
-          js_React_createElement <$>
-          pure (toJSString name) <*>
-          toPropsRef app props Nothing <*>
-          toReactNode app children)
+          -- Only set the children field if there are children.  This
+          -- allows 'dangerouslySetInnerHtml' to be used
+          -- (https://facebook.github.io/react/tips/dangerously-set-inner-html.html)
+          if V.null children
+            then js_React_createElement_no_children <$>
+                 pure (toJSString name) <*>
+                 toPropsRef app props Nothing
+            else js_React_createElement <$>
+                 pure (toJSString name) <*>
+                 toPropsRef app props Nothing <*>
+                 toReactNode app children)
     RNComponent (ReactComponent cls props cursorId) ->
       do putStrLn "RNComponent" -- FIXME: Removing this line causes a runtime exception. Seriously.
          (join $
           js_React_createElementFromClass <$>
           pure cls <*>
-          toPropsRef app props (Just cursorId) <*>
-          pure cursorId)
+          toPropsRef app props (Just cursorId))
     RNText _ -> error "Unexpected RNText in toReactElem."
 
 genCursor :: App state m -> Cursor -> IO Int
@@ -382,10 +409,7 @@ modifyProps f =
 -- | Run the react monad.
 runReactT :: Text -> App state m -> ReactT state m a -> m (a,ReactNode state)
 runReactT name app m = runStateT (runReaderT (unReactT m) app) init'
-  where init' =
-          (RNElement (ReactElement name
-                                   (ElemProps mempty mempty mempty)
-                                   mempty))
+  where init' = RNElement (ReactElement name mempty mempty)
 
 -- | A component for some state transforming over some monad.
 data Component state cursor (m :: * -> *) =
