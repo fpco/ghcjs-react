@@ -20,6 +20,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import           React.Internal
+import           System.IO.Unsafe (unsafePerformIO)
 
 #ifdef __GHCJS__
 import           JavaScript.JQuery (JQuery)
@@ -120,6 +121,13 @@ refAttr name val =
   modifyProps
     (\ep ->
        ep {epRefProps = Map.insert name (RefProp val) (epRefProps ep)})
+
+dangerouslySetInnerHTML :: Monad m => JSString -> ReactT state m ()
+dangerouslySetInnerHTML html = do
+  refAttr "dangerouslySetInnerHTML" $ unsafePerformIO $ do
+    obj <- newObj
+    setProp ("__html" :: JSString) html obj
+    return obj
 
 instance (a ~ (),Monad m) => IsString (ReactT state m a) where
   fromString = text . T.pack
